@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Bloc",
+    "slug": "bloc",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#14251C"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.bloc.app"
+    },
+    "android": {
+      "package": "com.bloc.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#14251C"
+      }
+    }
+  }
+}
