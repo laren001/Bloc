@@ -43,6 +43,7 @@ export default function PostScreen({ navigation }) {
     setUploading(true);
 
     try {
+      console.log('POST attempt — API_URL:', API_URL, '| user:', user?.id, '| image:', imageAsset?.uri);
       const formData = new FormData();
       formData.append('user_id', user.id);
       formData.append('caption', caption);
@@ -55,7 +56,6 @@ export default function PostScreen({ navigation }) {
 
       const res = await fetch(`${API_URL}/posts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'multipart/form-data' },
         body: formData,
       });
 

@@ -5,19 +5,19 @@ import { useTheme } from '../theme/ThemeContext';
 // Same layout as the Bloc brick mark — running-bond pattern, 4 rows.
 // Each brick falls into place with a staggered delay, holds, fades out, loops.
 const BRICKS = [
-  { x: 0,   y: 0,   w: 65, h: 30, dim: false, delay: 0 },
-  { x: 75,  y: 0,   w: 65, h: 30, dim: false, delay: 60 },
+  { x: 0,   y: 0,   w: 16, h: 7, dim: false, delay: 0 },
+  { x: 18,  y: 0,   w: 16, h: 7, dim: false, delay: 60 },
 
-  { x: -32, y: 37,  w: 65, h: 30, dim: false, delay: 140 },
-  { x: 42,  y: 37,  w: 65, h: 30, dim: false, delay: 200 },
-  { x: 117, y: 37,  w: 32, h: 30, dim: false, delay: 260 },
+  { x: -8,  y: 9,   w: 16, h: 7, dim: false, delay: 140 },
+  { x: 10,  y: 9,   w: 16, h: 7, dim: false, delay: 200 },
+  { x: 28,  y: 9,   w: 8,  h: 7, dim: false, delay: 260 },
 
-  { x: 0,   y: 75,  w: 65, h: 30, dim: false, delay: 340 },
-  { x: 75,  y: 75,  w: 65, h: 30, dim: false, delay: 400 },
+  { x: 0,   y: 18,  w: 16, h: 7, dim: false, delay: 340 },
+  { x: 18,  y: 18,  w: 16, h: 7, dim: false, delay: 400 },
 
-  { x: -32, y: 112, w: 65, h: 30, dim: true,  delay: 480 },
-  { x: 42,  y: 112, w: 65, h: 30, dim: false, delay: 540 },
-  { x: 117, y: 112, w: 32, h: 30, dim: true,  delay: 600 },
+  { x: -8,  y: 27,  w: 16, h: 7, dim: true,  delay: 480 },
+  { x: 10,  y: 27,  w: 16, h: 7, dim: false, delay: 540 },
+  { x: 28,  y: 27,  w: 8,  h: 7, dim: true,  delay: 600 },
 ];
 
 const CYCLE_DURATION = 2200;
@@ -50,7 +50,7 @@ function Brick({ config, color }) {
 
   const translateY = progress.interpolate({
     inputRange: [0, 1, 2],
-    outputRange: [-35, 0, 0],
+    outputRange: [-9, 0, 0],
     extrapolate: 'clamp',
   });
 
@@ -67,7 +67,7 @@ function Brick({ config, color }) {
         top: config.y,
         width: config.w,
         height: config.h,
-        borderRadius: 5,
+        borderRadius: 1,
         backgroundColor: color,
         opacity: config.dim ? Animated.multiply(opacity, 0.55) : opacity,
         transform: [{ translateY }],
@@ -76,11 +76,11 @@ function Brick({ config, color }) {
   );
 }
 
-export default function LoadingBricks() {
+export default function LoadingBricks({ inline }) {
   const { theme } = useTheme();
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, inline ? styles.inline : { backgroundColor: theme.background }]}>
       <View style={styles.brickField}>
         {BRICKS.map((b, i) => (
           <Brick key={i} config={b} color={theme.textPrimary} />
@@ -92,5 +92,6 @@ export default function LoadingBricks() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  brickField: { width: 150, height: 145, position: 'relative' },
+  inline: { flex: 0, paddingVertical: 40 },
+  brickField: { width: 36, height: 34, position: 'relative' },
 });

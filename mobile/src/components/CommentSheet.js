@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
@@ -10,8 +11,9 @@ import { useAuth } from '../auth/AuthContext';
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 export default function CommentSheet({ post, onClose, onCommentAdded }) {
-  const { theme } = useTheme();
+  const { theme, scaleFont } = useTheme();
   const { user } = useAuth();
+  const navigation = useNavigation();
   const [comments, setComments] = useState([]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -53,6 +55,22 @@ export default function CommentSheet({ post, onClose, onCommentAdded }) {
     }
   };
 
+  const goToProfile = (item) => {
+    const targetUserId = item.user_id ?? item.profiles?.id;
+    if (!targetUserId) return;
+
+    onClose?.();
+
+    if (user?.id && targetUserId === user.id) {
+      navigation.navigate('Profile');
+      return;
+    }
+    navigation.navigate('UserProfile', {
+      userId: targetUserId,
+      username: item.profiles?.username,
+    });
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -62,7 +80,7 @@ export default function CommentSheet({ post, onClose, onCommentAdded }) {
         <TouchableOpacity onPress={onClose}>
           <Ionicons name="arrow-back" size={20} color={theme.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.topBarTitle, { color: theme.textPrimary }]}>Comments</Text>
+        <Text style={[styles.topBarTitle, { color: theme.textPrimary, fontSize: scaleFont(15) }]}>Comments</Text>
         <View style={{ width: 20 }} />
       </View>
 
@@ -72,17 +90,19 @@ export default function CommentSheet({ post, onClose, onCommentAdded }) {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           !loading ? (
-            <Text style={{ color: theme.textSecondary, fontSize: 13, padding: 16 }}>
+            <Text style={{ color: theme.textSecondary, fontSize: scaleFont(13), padding: 16 }}>
               No comments yet — say something first.
             </Text>
           ) : null
         }
         renderItem={({ item }) => (
           <View style={styles.commentRow}>
-            <Text style={{ color: theme.textPrimary, fontSize: 13, fontWeight: '700' }}>
-              @{item.profiles?.username ?? 'user'}{' '}
-            </Text>
-            <Text style={{ color: theme.textPrimary, fontSize: 13, flexShrink: 1 }}>{item.content}</Text>
+            <TouchableOpacity onPress={() => goToProfile(item)}>
+              <Text style={{ color: theme.textPrimary, fontSize: scaleFont(13), fontWeight: '700' }}>
+                @{item.profiles?.username ?? 'user'}{' '}
+              </Text>
+            </TouchableOpacity>
+            <Text style={{ color: theme.textPrimary, fontSize: scaleFont(13), flexShrink: 1 }}>{item.content}</Text>
           </View>
         )}
       />
@@ -95,7 +115,7 @@ export default function CommentSheet({ post, onClose, onCommentAdded }) {
           placeholderTextColor={theme.textSecondary}
           style={[
             styles.input,
-            { backgroundColor: theme.surface, borderColor: theme.border, color: theme.textPrimary },
+            { backgroundColor: theme.surface, borderColor: theme.border, color: theme.textPrimary, fontSize: scaleFont(13.5) },
           ]}
         />
         <TouchableOpacity onPress={handleSend} disabled={!text.trim() || sending}>
@@ -116,13 +136,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingTop: 54, paddingBottom: 12, borderBottomWidth: 1,
   },
-  topBarTitle: { fontWeight: '700', fontSize: 15 },
+  topBarTitle: { fontWeight: '700' },
   listContent: { padding: 16, flexGrow: 1 },
   commentRow: { flexDirection: 'row', marginBottom: 12, flexWrap: 'wrap' },
   inputRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderTopWidth: 1,
   },
   input: {
-    flex: 1, borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13.5,
+    flex: 1, borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10,
   },
 });
