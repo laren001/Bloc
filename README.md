@@ -71,8 +71,10 @@ Scan the QR code with Expo Go on your phone to run it live.
 - ✅ Posting — photo upload (Cloudinary) → feed (chronological)
 - ✅ Likes + comments — real-time counts, optimistic like toggling
 - ✅ Stories — 24hr expiry, multi-story per user, location/event tagging, chained viewer (auto-advances into next person's stories), pause-on-hold
-- ⏳ Direct messages — not yet built (Phase 7)
-- ⏳ Explore/discover, profile grid polish — not yet built
+- ✅ Profile — grid of posts, follower/following counts, follow/unfollow with optimistic UI
+- ⚠️ Direct messages — inbox, chat screen, and send/receive are built ahead of the V1 roadmap (which deferred DMs to V2+). Currently polls on screen focus rather than updating live — Realtime is enabled on the `messages` table per setup step 1.4 above, but the chat/inbox screens don't yet subscribe to it, so a message won't appear for the recipient until they leave and reopen the chat
+- ⏳ Explore/discover — not yet built
+- ⏳ Avatar upload during profile setup — UI lets you pick a photo, but it isn't uploaded or saved yet (deferred alongside post-image upload work); the picker should probably be hidden until this is wired up
 
 See `Bloc_Roadmap.pdf` (shared earlier) for the full phase-by-phase plan.
 
