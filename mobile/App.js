@@ -1,9 +1,9 @@
-﻿import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, Platform, StyleSheet } from 'react-native';
+import { View, Text, Platform, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle } from 'react-native-svg';
 
@@ -14,12 +14,15 @@ import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import PostScreen from './src/screens/PostScreen';
+import DMInboxScreen from './src/screens/DMInboxScreen';
+import ChatScreen from './src/screens/ChatScreen';
 import LoadingBricks from './src/components/LoadingBricks';
 import Avatar from './src/components/Avatar';
 
 const Tab = createBottomTabNavigator();
 const HomeStackNav = createNativeStackNavigator();
 const ProfileStackNav = createNativeStackNavigator();
+const DMStackNav = createNativeStackNavigator();
 
 const ACTIVE_BG = '#CC5500';
 const ACTIVE_ICON = '#FFFFFF';
@@ -38,6 +41,41 @@ const TAB_LABELS = {
   Notifications: 'Alerts',
   Profile: 'Profile',
 };
+
+function useGlobalScrollbarStyle() {
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const styleId = 'bloc-scrollbar-style';
+    if (document.getElementById(styleId)) return;
+
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      * {
+        scrollbar-width: none;
+      }
+      *::-webkit-scrollbar {
+        display: none;
+        width: 0;
+        height: 0;
+      }
+      .bloc-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: #000000 transparent;
+      }
+      .bloc-scrollbar::-webkit-scrollbar {
+        display: block;
+        width: 6px;
+        background: transparent;
+      }
+      .bloc-scrollbar::-webkit-scrollbar-thumb {
+        background-color: #000000;
+        border-radius: 3px;
+      }
+    `;
+    document.head.appendChild(style);
+  }, []);
+}
 
 function DMIcon({ size = 24, color }) {
   return (
@@ -60,13 +98,26 @@ function DMIcon({ size = 24, color }) {
   );
 }
 
-function PlaceholderScreen({ label }) {
+function PlaceholderScreen({ label, scrollable }) {
   const { theme } = useTheme();
-  return (
-    <View style={{ flex: 1, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }}>
+  const content = (
+    <View style={{ flex: 1, minHeight: 600, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }}>
       <Text style={{ color: theme.textSecondary }}>{label} — coming soon</Text>
     </View>
   );
+
+  if (scrollable) {
+    return (
+      <ScrollView
+        style={{ flex: 1, backgroundColor: theme.background }}
+        {...(Platform.OS === 'web' ? { className: 'bloc-scrollbar' } : {})}
+      >
+        {content}
+      </ScrollView>
+    );
+  }
+
+  return content;
 }
 
 function NotificationDot({ theme }) {
@@ -126,12 +177,27 @@ function ProfileStack() {
     <ProfileStackNav.Navigator screenOptions={{ headerShown: false }}>
       <ProfileStackNav.Screen name="MyProfile" component={ProfileScreen} />
       <ProfileStackNav.Screen name="AccountSettings" component={SettingsScreen} />
+      <ProfileStackNav.Screen name="UserProfile" component={ProfileScreen} />
     </ProfileStackNav.Navigator>
+  );
+}
+
+// DM tab is now a stack: the inbox list, plus a pushed Chat screen for an
+// individual conversation. Reachable either from the inbox or from tapping
+// "Message" on someone's profile.
+function DMStack() {
+  return (
+    <DMStackNav.Navigator screenOptions={{ headerShown: false }}>
+      <DMStackNav.Screen name="Inbox" component={DMInboxScreen} />
+      <DMStackNav.Screen name="Chat" component={ChatScreen} />
+      <DMStackNav.Screen name="UserProfile" component={ProfileScreen} />
+    </DMStackNav.Navigator>
   );
 }
 
 function MainTabs() {
   const { theme } = useTheme();
+  useGlobalScrollbarStyle();
 
   const [unread, setUnread] = React.useState({ notifications: false, dm: false });
 
@@ -185,8 +251,8 @@ function MainTabs() {
     >
       <Tab.Screen name="Home" component={HomeStack} />
       <Tab.Screen name="Search" children={() => <PlaceholderScreen label="Search" />} />
-      <Tab.Screen name="DM" children={() => <PlaceholderScreen label="Messages" />} />
-      <Tab.Screen name="Notifications" children={() => <PlaceholderScreen label="Notifications" />} />
+      <Tab.Screen name="DM" component={DMStack} />
+      <Tab.Screen name="Notifications" children={() => <PlaceholderScreen label="Alerts" scrollable />} />
       <Tab.Screen name="Profile" component={ProfileStack} />
     </Tab.Navigator>
   );

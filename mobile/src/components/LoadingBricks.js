@@ -21,42 +21,64 @@ const BRICKS = [
 ];
 
 const CYCLE_DURATION = 2200;
+const RISE_DURATION = 500;
+const FADE_DURATION = 300;
 
 function Brick({ config, color }) {
-  const progress = useRef(new Animated.Value(0)).current;
+  // Two separate values: one purely for the bounce-in position (allowed to
+  // overshoot past 1, since Easing.back needs that room), and one purely
+  // for opacity (rises 0→1 linearly alongside it, then holds, then fades
+  // 1→0). Keeping them separate means the position overshoot can never
+  // leak into — and flicker — the opacity.
+  const rise = useRef(new Animated.Value(0)).current;
+  const fade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const animate = () => {
-      progress.setValue(0);
-      Animated.sequence([
-        Animated.delay(config.delay),
-        Animated.timing(progress, {
+    const hold = CYCLE_DURATION - config.delay - RISE_DURATION - FADE_DURATION;
+
+    const cycle = Animated.sequence([
+      Animated.delay(config.delay),
+      Animated.parallel([
+        Animated.timing(rise, {
           toValue: 1,
-          duration: 500,
+          duration: RISE_DURATION,
           easing: Easing.out(Easing.back(1.4)),
           useNativeDriver: true,
         }),
-        Animated.delay(CYCLE_DURATION - config.delay - 500 - 300),
-        Animated.timing(progress, {
-          toValue: 2,
-          duration: 300,
-          easing: Easing.in(Easing.ease),
+        Animated.timing(fade, {
+          toValue: 1,
+          duration: RISE_DURATION,
+          easing: Easing.out(Easing.ease),
           useNativeDriver: true,
         }),
-      ]).start(() => animate());
-    };
-    animate();
+      ]),
+      Animated.delay(Math.max(hold, 0)),
+      Animated.timing(fade, {
+        toValue: 0,
+        duration: FADE_DURATION,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }),
+      // Snap rise back to 0 instantly (opacity is already 0 here, so this
+      // is invisible) so the next loop's bounce-in starts from the same
+      // place every time.
+      Animated.timing(rise, {
+        toValue: 0,
+        duration: 0,
+        useNativeDriver: true,
+      }),
+    ]);
+
+    const loop = Animated.loop(cycle, { resetBeforeIteration: true });
+    loop.start();
+
+    return () => loop.stop();
   }, []);
 
-  const translateY = progress.interpolate({
-    inputRange: [0, 1, 2],
-    outputRange: [-9, 0, 0],
-    extrapolate: 'clamp',
-  });
-
-  const opacity = progress.interpolate({
-    inputRange: [0, 1, 2],
-    outputRange: [0, 1, 0],
+  const translateY = rise.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-9, 0],
+    extrapolate: 'extend', // let the back-easing overshoot slightly past 0
   });
 
   return (
@@ -69,7 +91,7 @@ function Brick({ config, color }) {
         height: config.h,
         borderRadius: 1,
         backgroundColor: color,
-        opacity: config.dim ? Animated.multiply(opacity, 0.55) : opacity,
+        opacity: config.dim ? Animated.multiply(fade, 0.55) : fade,
         transform: [{ translateY }],
       }}
     />

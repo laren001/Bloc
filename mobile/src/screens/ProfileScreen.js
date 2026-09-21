@@ -37,7 +37,8 @@ export default function ProfileScreen() {
       if (isOwnProfile) {
         setProfile(ownProfile);
       } else {
-        const profileRes = await fetch(`${API_URL}/users/${targetUserId}`);
+        const viewerParam = user?.id ? `?viewer_id=${user.id}` : '';
+        const profileRes = await fetch(`${API_URL}/users/${targetUserId}${viewerParam}`);
         const profileData = await profileRes.json();
         setProfile(profileData);
         setIsFollowing(!!profileData?.is_following_viewer_target);
@@ -51,7 +52,7 @@ export default function ProfileScreen() {
     } finally {
       setLoading(false);
     }
-  }, [targetUserId, isOwnProfile, ownProfile]);
+  }, [targetUserId, isOwnProfile, ownProfile, user?.id]);
 
   useEffect(() => {
     load();
@@ -80,6 +81,19 @@ export default function ProfileScreen() {
     } finally {
       setFollowBusy(false);
     }
+  };
+
+  const goToChat = () => {
+    if (!targetUserId) return;
+    navigation.navigate('DM', {
+      screen: 'Chat',
+      params: {
+        otherUserId: targetUserId,
+        otherUsername: profile?.username,
+        otherDisplayName: profile?.display_name,
+        otherAvatarUrl: profile?.avatar_url,
+      },
+    });
   };
 
   if (loading) {
@@ -151,20 +165,29 @@ export default function ProfileScreen() {
             </View>
 
             {!isOwnProfile && (
-              <TouchableOpacity
-                onPress={toggleFollow}
-                disabled={followBusy}
-                style={[
-                  styles.followButton,
-                  isFollowing
-                    ? { borderColor: theme.border, borderWidth: 1, backgroundColor: 'transparent' }
-                    : { backgroundColor: '#CC5500' },
-                ]}
-              >
-                <Text style={{ color: isFollowing ? theme.textPrimary : '#FFFFFF', fontWeight: '700', fontSize: scaleFont(14) }}>
-                  {isFollowing ? 'Following' : 'Follow'}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  onPress={toggleFollow}
+                  disabled={followBusy}
+                  style={[
+                    styles.actionButton,
+                    isFollowing
+                      ? { borderColor: theme.border, borderWidth: 1, backgroundColor: 'transparent' }
+                      : { backgroundColor: '#CC5500' },
+                  ]}
+                >
+                  <Text style={{ color: isFollowing ? theme.textPrimary : '#FFFFFF', fontWeight: '700', fontSize: scaleFont(14) }}>
+                    {isFollowing ? 'Following' : 'Follow'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={goToChat}
+                  style={[styles.actionButton, { borderColor: theme.border, borderWidth: 1, backgroundColor: 'transparent' }]}
+                >
+                  <Text style={{ color: theme.textPrimary, fontWeight: '700', fontSize: scaleFont(14) }}>Message</Text>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         }
@@ -202,5 +225,6 @@ const styles = StyleSheet.create({
   statItem: { alignItems: 'center' },
   statCount: { fontWeight: '700' },
   statLabel: { marginTop: 2 },
-  followButton: { paddingVertical: 8, paddingHorizontal: 32, borderRadius: 8, marginBottom: 8 },
+  actionRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
+  actionButton: { paddingVertical: 8, paddingHorizontal: 24, borderRadius: 8 },
 });

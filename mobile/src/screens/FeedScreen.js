@@ -12,7 +12,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const DOUBLE_TAP_DELAY = 280;
 
 export default function FeedScreen() {
-  const { theme } = useTheme();
+  const { theme, scaleFont } = useTheme();
   const { user } = useAuth();
   const navigation = useNavigation();
   const [posts, setPosts] = useState([]);
@@ -151,11 +151,11 @@ export default function FeedScreen() {
 
         <View style={styles.metaRow}>
           <TouchableOpacity style={styles.byline} onPress={() => goToProfile(item)}>
-            <Text style={[styles.username, { color: theme.textPrimary, fontFamily: typography.fontFamily.serif }]}>
+            <Text style={[styles.username, { color: theme.textPrimary, fontFamily: typography.fontFamily.serif, fontSize: scaleFont(typography.size.subtitle) }]}>
               @{item.profiles?.username ?? 'unknown'}
             </Text>
             {item.location ? (
-              <Text style={[styles.location, { color: theme.textSecondary }]}>{item.location}</Text>
+              <Text style={[styles.location, { color: theme.textSecondary, fontSize: scaleFont(typography.size.tiny) }]}>{item.location}</Text>
             ) : null}
           </TouchableOpacity>
 
@@ -166,22 +166,22 @@ export default function FeedScreen() {
                 size={18}
                 color={item.liked_by_viewer ? theme.accent : theme.textSecondary}
               />
-              <Text style={[styles.actionCount, { color: theme.textSecondary }]}>{item.like_count}</Text>
+              <Text style={[styles.actionCount, { color: theme.textSecondary, fontSize: scaleFont(typography.size.caption) }]}>{item.like_count}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setActiveComments(item)} style={styles.actionItem}>
               <Ionicons name="chatbubble-outline" size={17} color={theme.textSecondary} />
-              <Text style={[styles.actionCount, { color: theme.textSecondary }]}>{item.comment_count}</Text>
+              <Text style={[styles.actionCount, { color: theme.textSecondary, fontSize: scaleFont(typography.size.caption) }]}>{item.comment_count}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {item.caption ? (
-          <Text style={[styles.caption, { color: theme.textPrimary }]}>{item.caption}</Text>
+          <Text style={[styles.caption, { color: theme.textPrimary, fontSize: scaleFont(typography.size.body) }]}>{item.caption}</Text>
         ) : null}
 
         {item.comment_count > 0 && (
           <TouchableOpacity onPress={() => setActiveComments(item)}>
-            <Text style={[styles.viewComments, { color: theme.textSecondary }]}>
+            <Text style={[styles.viewComments, { color: theme.textSecondary, fontSize: scaleFont(typography.size.tiny) }]}>
               View all {item.comment_count} comment{item.comment_count !== 1 ? 's' : ''}
             </Text>
           </TouchableOpacity>
@@ -200,6 +200,7 @@ export default function FeedScreen() {
         data={posts}
         keyExtractor={(item) => item.id}
         renderItem={renderPost}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textPrimary} />
         }
@@ -237,16 +238,15 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   byline: { flexShrink: 1, paddingRight: spacing.md },
-  username: { fontSize: typography.size.subtitle, fontWeight: typography.weight.medium },
-  location: { fontSize: typography.size.tiny, marginTop: 2 },
+  username: { fontWeight: typography.weight.medium },
+  location: { marginTop: 2 },
   actions: { flexDirection: 'row', gap: spacing.md },
   actionItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  actionCount: { fontSize: typography.size.caption },
+  actionCount: {},
   caption: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    fontSize: typography.size.body,
     lineHeight: 20,
   },
-  viewComments: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs, fontSize: typography.size.tiny },
+  viewComments: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs },
 });
