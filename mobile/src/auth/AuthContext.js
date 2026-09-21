@@ -3,6 +3,21 @@ import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext(null);
 
+const DISPLAY_NAME_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 1 day
+const USERNAME_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// How long until a cooldown clears, in a short human-readable form.
+function formatRemaining(msRemaining) {
+  const hours = Math.ceil(msRemaining / (60 * 60 * 1000));
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'}`;
+  const days = Math.ceil(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
+function msSinceOrInfinity(dateString) {
+  return dateString ? Date.now() - new Date(dateString).getTime() : Infinity;
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -43,7 +58,6 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
 
-    // Create the profile row right after signup so username is reserved immediately.
     if (data.user) {
       const { error: profileError } = await supabase
         .from('profiles')
@@ -78,6 +92,50 @@ export function AuthProvider({ children }) {
     return data;
   }
 
+  // Display name: once every 24 hours.
+  async function updateDisplayName(newDisplayName) {
+    if (!session?.user) throw new Error('No active session');
+
+    const elapsed = msSinceOrInfinity(profile?.display_name_updated_at);
+    if (elapsed < DISPLAY_NAME_COOLDOWN_MS) {
+      throw new Error(`You can change your display name again in ${formatRemaining(DISPLAY_NAME_COOLDOWN_MS - elapsed)}.`);
+    }
+
+    return updateProfile({
+      display_name: newDisplayName,
+      display_name_updated_at: new Date().toISOString(),
+    });
+  }
+
+  // Username: once every 7 days.
+  async function updateUsername(newUsername) {
+    if (!session?.user) throw new Error('No active session');
+
+    const elapsed = msSinceOrInfinity(profile?.username_updated_at);
+    if (elapsed < USERNAME_COOLDOWN_MS) {
+      throw new Error(`You can change your username again in ${formatRemaining(USERNAME_COOLDOWN_MS - elapsed)}.`);
+    }
+
+    return updateProfile({
+      username: newUsername,
+      username_updated_at: new Date().toISOString(),
+    });
+  }
+
+  async function updateEmail(newEmail) {
+    if (!session?.user) throw new Error('No active session');
+    const { data, error } = await supabase.auth.updateUser({ email: newEmail });
+    if (error) throw error;
+    return data;
+  }
+
+  async function updatePassword(newPassword) {
+    if (!session?.user) throw new Error('No active session');
+    const { data, error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    return data;
+  }
+
   const value = {
     session,
     user: session?.user ?? null,
@@ -87,6 +145,12 @@ export function AuthProvider({ children }) {
     signIn,
     signOut,
     updateProfile,
+    updateUsername,
+    updateDisplayName,
+    updateEmail,
+    updatePassword,
+    DISPLAY_NAME_COOLDOWN_MS,
+    USERNAME_COOLDOWN_MS,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
