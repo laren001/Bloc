@@ -88,9 +88,9 @@ function FontScaleModal({ visible, current, onCancel, onSelect, theme, scaleFont
   );
 }
 
-function MenuItem({ label, value, onPress, theme, danger, scaleFont }) {
+function MenuItem({ label, value, note, onPress, theme, danger, disabled, scaleFont }) {
   return (
-    <TouchableOpacity onPress={onPress} style={[styles.menuItem, { borderColor: theme.border }]}>
+    <TouchableOpacity onPress={onPress} disabled={disabled} style={[styles.menuItem, { borderColor: theme.border }, disabled && { opacity: 0.5 }]}>
       <View style={{ flex: 1 }}>
         <Text style={[styles.menuLabel, { color: danger ? theme.accent : theme.textPrimary, fontSize: scaleFont(15) }]}>
           {label}
@@ -100,19 +100,43 @@ function MenuItem({ label, value, onPress, theme, danger, scaleFont }) {
             {value}
           </Text>
         ) : null}
+        {note ? (
+          <Text style={[styles.menuNote, { color: theme.textSecondary, fontSize: scaleFont(11) }]} numberOfLines={1}>
+            {note}
+          </Text>
+        ) : null}
       </View>
       {!danger && <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />}
     </TouchableOpacity>
   );
 }
 
+// Cooldown remaining, formatted, or null if eligible right now.
+function cooldownNote(updatedAt, cooldownMs, label) {
+  if (!updatedAt) return null;
+  const elapsed = Date.now() - new Date(updatedAt).getTime();
+  const remaining = cooldownMs - elapsed;
+  if (remaining <= 0) return null;
+
+  const hours = Math.ceil(remaining / (60 * 60 * 1000));
+  const readable = hours < 24 ? `${hours}h` : `${Math.ceil(hours / 24)}d`;
+  return `${label} again in ${readable}`;
+}
+
 export default function SettingsScreen() {
   const { theme, scaleFont, fontScaleKey, setFontScale } = useTheme();
-  const { signOut, profile, user, updateProfile, updateEmail, updatePassword } = useAuth();
+  const {
+    signOut, profile, user,
+    updateUsername, updateDisplayName, updateProfile, updateEmail, updatePassword,
+    DISPLAY_NAME_COOLDOWN_MS, USERNAME_COOLDOWN_MS,
+  } = useAuth();
   const navigation = useNavigation();
 
   const [activeModal, setActiveModal] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  const displayNameNote = cooldownNote(profile?.display_name_updated_at, DISPLAY_NAME_COOLDOWN_MS, 'Change');
+  const usernameNote = cooldownNote(profile?.username_updated_at, USERNAME_COOLDOWN_MS, 'Change');
 
   const handleSignOut = () => {
     Alert.alert('Log out', 'Are you sure you want to log out?', [
@@ -129,14 +153,41 @@ export default function SettingsScreen() {
 
   const closeModal = () => setActiveModal(null);
 
-  const saveProfileField = async (fieldLabel, updates) => {
+  const handleSaveUsername = async (values) => {
+    if (!values.username?.trim()) return;
     setSaving(true);
     try {
-      await updateProfile(updates);
+      await updateUsername(values.username.trim());
       closeModal();
     } catch (err) {
-      console.error(`Failed to update ${fieldLabel}`, err);
-      Alert.alert('Something went wrong', `Couldn't update your ${fieldLabel}. Try again.`);
+      console.error('Failed to update username', err);
+      Alert.alert('Something went wrong', err.message || "Couldn't update your username. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveDisplayName = async (values) => {
+    setSaving(true);
+    try {
+      await updateDisplayName(values.display_name);
+      closeModal();
+    } catch (err) {
+      console.error('Failed to update display name', err);
+      Alert.alert('Something went wrong', err.message || "Couldn't update your display name. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveBio = async (values) => {
+    setSaving(true);
+    try {
+      await updateProfile({ bio: values.bio });
+      closeModal();
+    } catch (err) {
+      console.error('Failed to update bio', err);
+      Alert.alert('Something went wrong', "Couldn't update your bio. Try again.");
     } finally {
       setSaving(false);
     }
@@ -187,8 +238,24 @@ export default function SettingsScreen() {
 
       <Text style={[styles.label, { color: theme.textPrimary, fontSize: scaleFont(14) }]}>Account</Text>
       <View style={styles.menuGroup}>
-        <MenuItem label="Username" value={profile?.username ? `@${profile.username}` : 'Not set'} onPress={() => setActiveModal('username')} theme={theme} scaleFont={scaleFont} />
-        <MenuItem label="Display name" value={profile?.display_name || 'Not set'} onPress={() => setActiveModal('displayName')} theme={theme} scaleFont={scaleFont} />
+        <MenuItem
+          label="Username"
+          value={profile?.username ? `@${profile.username}` : 'Not set'}
+          note={usernameNote}
+          disabled={!!usernameNote}
+          onPress={() => setActiveModal('username')}
+          theme={theme}
+          scaleFont={scaleFont}
+        />
+        <MenuItem
+          label="Display name"
+          value={profile?.display_name || 'Not set'}
+          note={displayNameNote}
+          disabled={!!displayNameNote}
+          onPress={() => setActiveModal('displayName')}
+          theme={theme}
+          scaleFont={scaleFont}
+        />
         <MenuItem label="Bio" value={profile?.bio || 'Not set'} onPress={() => setActiveModal('bio')} theme={theme} scaleFont={scaleFont} />
         <MenuItem label="Email" value={user?.email || 'Not set'} onPress={() => setActiveModal('email')} theme={theme} scaleFont={scaleFont} />
         <MenuItem label="Password" value="••••••••" onPress={() => setActiveModal('password')} theme={theme} scaleFont={scaleFont} />
@@ -216,7 +283,7 @@ export default function SettingsScreen() {
         title="Edit username"
         fields={[{ key: 'username', placeholder: 'username', initialValue: profile?.username }]}
         onCancel={closeModal}
-        onSave={(v) => saveProfileField('username', { username: v.username })}
+        onSave={handleSaveUsername}
         saving={saving}
         theme={theme}
         scaleFont={scaleFont}
@@ -226,7 +293,7 @@ export default function SettingsScreen() {
         title="Edit display name"
         fields={[{ key: 'display_name', placeholder: 'Display name', initialValue: profile?.display_name, autoCapitalize: 'words' }]}
         onCancel={closeModal}
-        onSave={(v) => saveProfileField('display name', { display_name: v.display_name })}
+        onSave={handleSaveDisplayName}
         saving={saving}
         theme={theme}
         scaleFont={scaleFont}
@@ -236,7 +303,7 @@ export default function SettingsScreen() {
         title="Edit bio"
         fields={[{ key: 'bio', placeholder: 'Tell people about yourself', initialValue: profile?.bio, multiline: true }]}
         onCancel={closeModal}
-        onSave={(v) => saveProfileField('bio', { bio: v.bio })}
+        onSave={handleSaveBio}
         saving={saving}
         theme={theme}
         scaleFont={scaleFont}
@@ -293,6 +360,7 @@ const styles = StyleSheet.create({
   menuItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth },
   menuLabel: { fontWeight: '600' },
   menuValue: { marginTop: 2 },
+  menuNote: { marginTop: 2, fontStyle: 'italic' },
   signOutButton: { marginTop: 32, marginHorizontal: 20, borderWidth: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   modalCard: { width: '100%', borderRadius: 14, padding: 20 },
