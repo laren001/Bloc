@@ -1,7 +1,20 @@
 import express from 'express';
+import multer from 'multer';
 import { supabase } from '../config/supabase.js';
+import cloudinary from '../config/cloudinary.js';
 
 const router = express.Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 60 * 1024 * 1024 }, // 60MB cap, same as posts
+});
+
+function previewText(msg) {
+  if (msg.content) return msg.content;
+  if (msg.media_type === 'video') return '🎥 Video';
+  if (msg.media_type === 'photo') return '📷 Photo';
+  return '';
+}
 
 // GET /messages/:userId - inbox: one row per conversation partner, with
 // their profile, the most recent message, and how many are unread.
@@ -22,7 +35,7 @@ router.get('/:userId', async (req, res) => {
     if (!conversations.has(otherId)) {
       conversations.set(otherId, {
         other_user_id: otherId,
-        last_message: msg.content,
+        last_message: previewText(msg),
         last_message_at: msg.created_at,
         unread_count: 0,
       });
@@ -70,13 +83,53 @@ router.get('/:userId/:otherUserId', async (req, res) => {
   res.json(data);
 });
 
-// POST /messages - send a message
-router.post('/', async (req, res) => {
+// POST /messages - send a message. Accepts either a JSON body (text-only,
+// unchanged from before) or multipart form data with a "media" file
+// (photo or video, with optional accompanying text in "content").
+router.post('/', upload.single('media'), async (req, res) => {
   const { sender_id, recipient_id, content } = req.body;
+
+  if (!sender_id || !recipient_id) {
+    return res.status(400).json({ error: 'sender_id and recipient_id are required' });
+  }
+  if (!content && !req.file) {
+    return res.status(400).json({ error: 'A message needs text or media' });
+  }
+
+  let media_url = null;
+  let media_type = null;
+  let thumbnail_url = null;
+
+  if (req.file) {
+    const isVideo = req.file.mimetype.startsWith('video/');
+    try {
+      const uploadResult = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'bloc/dm_media', resource_type: isVideo ? 'video' : 'image' },
+          (error, result) => (error ? reject(error) : resolve(result))
+        );
+        stream.end(req.file.buffer);
+      });
+      media_url = uploadResult.secure_url;
+      media_type = isVideo ? 'video' : 'photo';
+      thumbnail_url = isVideo
+        ? cloudinary.url(uploadResult.public_id, { resource_type: 'video', format: 'jpg' })
+        : null;
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
 
   const { data, error } = await supabase
     .from('messages')
-    .insert({ sender_id, recipient_id, content })
+    .insert({
+      sender_id,
+      recipient_id,
+      content: content || null,
+      media_url,
+      media_type,
+      thumbnail_url,
+    })
     .select()
     .single();
 

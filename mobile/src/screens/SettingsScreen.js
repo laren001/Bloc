@@ -37,7 +37,7 @@ function EditModal({ visible, title, fields, onCancel, onSave, saving, theme, sc
               placeholder={f.placeholder}
               placeholderTextColor={theme.textSecondary}
               value={values[f.key] ?? ''}
-              onChangeText={(text) => setValues((v) => ({ ...v, [f.key]: text }))}
+              onChangeText={(text) => setValues((v) => ({ ...v, [f.key]: f.sanitize ? f.sanitize(text) : text }))}
               secureTextEntry={f.secure}
               autoCapitalize={f.autoCapitalize ?? 'none'}
               keyboardType={f.keyboardType ?? 'default'}
@@ -281,7 +281,12 @@ export default function SettingsScreen() {
       <EditModal
         visible={activeModal === 'username'}
         title="Edit username"
-        fields={[{ key: 'username', placeholder: 'username', initialValue: profile?.username }]}
+        fields={[{
+          key: 'username',
+          placeholder: 'username',
+          initialValue: profile?.username,
+          sanitize: (v) => v.replace(/[^a-zA-Z0-9]/g, ''),
+        }]}
         onCancel={closeModal}
         onSave={handleSaveUsername}
         saving={saving}
