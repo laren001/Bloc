@@ -1,3 +1,4 @@
+import { authFetch } from '../lib/authFetch';
 import React, { useState, useRef } from 'react';
 import {
   View, Text, TextInput, Image, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ScrollView, Modal, FlatList,
@@ -76,7 +77,7 @@ export default function PostScreen({ navigation }) {
     setTagSearching(true);
     searchDebounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(
+        const res = await authFetch(
           `${API_URL}/users/search?q=${encodeURIComponent(query.trim())}&viewer_id=${user?.id ?? ''}`
         );
         const data = await res.json();
@@ -125,7 +126,7 @@ export default function PostScreen({ navigation }) {
         type: mediaAsset.mimeType || (isVideo ? 'video/mp4' : 'image/jpeg'),
       });
 
-      const res = await fetch(`${API_URL}/posts`, {
+      const res = await authFetch(`${API_URL}/posts`, {
         method: 'POST',
         body: formData,
       });

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform,
@@ -7,6 +7,8 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
+import { authFetch } from '../lib/authFetch';
+import MentionText from './MentionText';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -21,9 +23,9 @@ export default function CommentSheet({ post, onClose, onCommentAdded }) {
 
   const loadComments = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/posts/${post.id}/comments`);
+      const res = await authFetch(`${API_URL}/posts/${post.id}/comments`);
       const data = await res.json();
-      setComments(data);
+      setComments(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load comments', err);
     } finally {
@@ -39,10 +41,10 @@ export default function CommentSheet({ post, onClose, onCommentAdded }) {
     if (!text.trim() || !user) return;
     setSending(true);
     try {
-      const res = await fetch(`${API_URL}/posts/${post.id}/comments`, {
+      const res = await authFetch(`${API_URL}/posts/${post.id}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id, content: text.trim() }),
+        body: JSON.stringify({ content: text.trim() }),
       });
       const newComment = await res.json();
       setComments((prev) => [...prev, newComment]);
@@ -55,8 +57,7 @@ export default function CommentSheet({ post, onClose, onCommentAdded }) {
     }
   };
 
-  const goToProfile = (item) => {
-    const targetUserId = item.user_id ?? item.profiles?.id;
+  const goToProfile = (targetUserId, username) => {
     if (!targetUserId) return;
 
     onClose?.();
@@ -65,10 +66,7 @@ export default function CommentSheet({ post, onClose, onCommentAdded }) {
       navigation.navigate('Profile');
       return;
     }
-    navigation.navigate('UserProfile', {
-      userId: targetUserId,
-      username: item.profiles?.username,
-    });
+    navigation.navigate('UserProfile', { userId: targetUserId, username });
   };
 
   return (
@@ -91,18 +89,24 @@ export default function CommentSheet({ post, onClose, onCommentAdded }) {
         ListEmptyComponent={
           !loading ? (
             <Text style={{ color: theme.textSecondary, fontSize: scaleFont(13), padding: 16 }}>
-              No comments yet — say something first.
+              No comments yet - say something first.
             </Text>
           ) : null
         }
         renderItem={({ item }) => (
           <View style={styles.commentRow}>
-            <TouchableOpacity onPress={() => goToProfile(item)}>
+            <TouchableOpacity onPress={() => goToProfile(item.user_id ?? item.profiles?.id, item.profiles?.username)}>
               <Text style={{ color: theme.textPrimary, fontSize: scaleFont(13), fontWeight: '700' }}>
                 @{item.profiles?.username ?? 'user'}{' '}
               </Text>
             </TouchableOpacity>
-            <Text style={{ color: theme.textPrimary, fontSize: scaleFont(13), flexShrink: 1 }}>{item.content}</Text>
+            <MentionText
+              text={item.content}
+              mentionedUsers={item.mentioned_users}
+              currentUserId={user?.id}
+              style={{ color: theme.textPrimary, fontSize: scaleFont(13), flexShrink: 1 }}
+              linkStyle={{ color: theme.accent, fontWeight: '600' }}
+            />
           </View>
         )}
       />
@@ -111,7 +115,7 @@ export default function CommentSheet({ post, onClose, onCommentAdded }) {
         <TextInput
           value={text}
           onChangeText={setText}
-          placeholder="Add a comment…"
+          placeholder="Add a comment..."
           placeholderTextColor={theme.textSecondary}
           style={[
             styles.input,

@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+import { authFetch } from '../lib/authFetch';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, Image, FlatList, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,22 +30,33 @@ export default function ProfileScreen() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
 
+  // Exact 3-column grid, edge to edge: total cell width across a row must
+  // equal the screen width exactly, so only gaps BETWEEN cells count —
+  // there are (GRID_COLUMNS - 1) gaps per row, not one per cell.
   const cellSize = (width - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
 
   const load = useCallback(async () => {
-    if (!targetUserId) return;
+    // If targetUserId isn't resolved yet (e.g. route params or auth state
+    // hasn't settled on first render), bail out but still clear loading —
+    // otherwise this screen gets stuck on LoadingBricks forever, since the
+    // finally block below would never run.
+    if (!targetUserId) {
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isOwnProfile) {
         setProfile(ownProfile);
       } else {
         const viewerParam = user?.id ? `?viewer_id=${user.id}` : '';
-        const profileRes = await fetch(`${API_URL}/users/${targetUserId}${viewerParam}`);
+        const profileRes = await authFetch(`${API_URL}/users/${targetUserId}${viewerParam}`);
         const profileData = await profileRes.json();
         setProfile(profileData);
         setIsFollowing(!!profileData?.is_following_viewer_target);
       }
 
-      const postsRes = await fetch(`${API_URL}/users/${targetUserId}/posts`);
+      const postsRes = await authFetch(`${API_URL}/users/${targetUserId}/posts`);
       const postsData = await postsRes.json();
       setPosts(postsData);
     } catch (err) {
@@ -70,7 +82,7 @@ export default function ProfileScreen() {
     setIsFollowing(!wasFollowing);
     setFollowBusy(true);
     try {
-      await fetch(`${API_URL}/users/${targetUserId}/follow`, {
+      await authFetch(`${API_URL}/users/${targetUserId}/follow`, {
         method: wasFollowing ? 'DELETE' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ follower_id: user.id }),
@@ -126,7 +138,7 @@ export default function ProfileScreen() {
 
       <FlatList
         data={posts}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.feed_key ?? item.id}
         numColumns={GRID_COLUMNS}
         ListHeaderComponent={
           <View style={styles.header}>
@@ -191,11 +203,34 @@ export default function ProfileScreen() {
             )}
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={{ width: cellSize, height: cellSize, marginBottom: GRID_GAP, marginRight: GRID_GAP }}>
-            <Image source={{ uri: item.image_url }} style={{ width: '100%', height: '100%', backgroundColor: theme.border }} />
-          </View>
-        )}
+        renderItem={({ item, index }) => {
+          const isLastInRow = (index + 1) % GRID_COLUMNS === 0;
+          const isVideo = item.media_type === 'video';
+          const thumbUri = isVideo ? (item.thumbnail_url || item.image_url) : item.image_url;
+
+          return (
+            <View
+              style={{
+                width: cellSize,
+                height: cellSize,
+                marginBottom: GRID_GAP,
+                marginRight: isLastInRow ? 0 : GRID_GAP,
+              }}
+            >
+              <Image source={{ uri: thumbUri }} style={{ width: '100%', height: '100%', backgroundColor: theme.border }} />
+              {isVideo && (
+                <View pointerEvents="none" style={styles.videoBadge}>
+                  <Ionicons name="videocam" size={14} color="#FFFFFF" />
+                </View>
+              )}
+              {item.is_repost && (
+                <View pointerEvents="none" style={styles.repostBadge}>
+                  <Ionicons name="repeat" size={14} color="#FFFFFF" />
+                </View>
+              )}
+            </View>
+          );
+        }}
         ListEmptyComponent={
           <Text style={{ color: theme.textSecondary, textAlign: 'center', marginTop: 24, fontSize: scaleFont(14) }}>
             No posts yet
@@ -227,4 +262,14 @@ const styles = StyleSheet.create({
   statLabel: { marginTop: 2 },
   actionRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
   actionButton: { paddingVertical: 8, paddingHorizontal: 24, borderRadius: 8 },
+  videoBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+  },
+  repostBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+  },
 });

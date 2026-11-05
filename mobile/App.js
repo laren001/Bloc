@@ -9,6 +9,8 @@ import Svg, { Path, Circle } from 'react-native-svg';
 
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
+import { supabase } from './src/lib/supabase';
+import { authFetch } from './src/lib/authFetch';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -16,13 +18,19 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import PostScreen from './src/screens/PostScreen';
 import DMInboxScreen from './src/screens/DMInboxScreen';
 import ChatScreen from './src/screens/ChatScreen';
+import NotificationsScreen from './src/screens/NotificationsScreen';
+import SearchScreen from './src/screens/SearchScreen';
 import LoadingBricks from './src/components/LoadingBricks';
 import Avatar from './src/components/Avatar';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 const Tab = createBottomTabNavigator();
 const HomeStackNav = createNativeStackNavigator();
 const ProfileStackNav = createNativeStackNavigator();
 const DMStackNav = createNativeStackNavigator();
+const NotificationsStackNav = createNativeStackNavigator();
+const SearchStackNav = createNativeStackNavigator();
 
 const ACTIVE_BG = '#CC5500';
 const ACTIVE_ICON = '#FFFFFF';
@@ -182,9 +190,6 @@ function ProfileStack() {
   );
 }
 
-// DM tab is now a stack: the inbox list, plus a pushed Chat screen for an
-// individual conversation. Reachable either from the inbox or from tapping
-// "Message" on someone's profile.
 function DMStack() {
   return (
     <DMStackNav.Navigator screenOptions={{ headerShown: false }}>
@@ -195,11 +200,79 @@ function DMStack() {
   );
 }
 
+function NotificationsStack() {
+  return (
+    <NotificationsStackNav.Navigator screenOptions={{ headerShown: false }}>
+      <NotificationsStackNav.Screen name="NotificationsHome" component={NotificationsScreen} />
+      <NotificationsStackNav.Screen name="UserProfile" component={ProfileScreen} />
+    </NotificationsStackNav.Navigator>
+  );
+}
+
+function SearchStack() {
+  return (
+    <SearchStackNav.Navigator screenOptions={{ headerShown: false }}>
+      <SearchStackNav.Screen name="SearchHome" component={SearchScreen} />
+      <SearchStackNav.Screen name="UserProfile" component={ProfileScreen} />
+    </SearchStackNav.Navigator>
+  );
+}
+
 function MainTabs() {
   const { theme } = useTheme();
+  const { user } = useAuth();
   useGlobalScrollbarStyle();
 
   const [unread, setUnread] = React.useState({ notifications: false, dm: false });
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const checkInitialUnread = async () => {
+      try {
+        const [notifRes, inboxRes] = await Promise.all([
+          authFetch(`${API_URL}/notifications/${user.id}`),
+          authFetch(`${API_URL}/messages/${user.id}`),
+        ]);
+        const notifs = await notifRes.json();
+        const inbox = await inboxRes.json();
+        const hasUnreadNotifs = Array.isArray(notifs) && notifs.some((n) => !n.read);
+        const hasUnreadDMs = Array.isArray(inbox) && inbox.some((c) => c.unread_count > 0);
+        setUnread({ notifications: hasUnreadNotifs, dm: hasUnreadDMs });
+      } catch (err) {
+        console.error('Failed to check initial unread state', err);
+      }
+    };
+
+    checkInitialUnread();
+
+    const notifChannel = supabase
+      .channel(`tab-notifications:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` },
+        () => setUnread((u) => ({ ...u, notifications: true }))
+      )
+      .subscribe();
+
+    const dmChannel = supabase
+      .channel(`tab-dm:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          if (payload.new.recipient_id === user.id) {
+            setUnread((u) => ({ ...u, dm: true }));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(notifChannel);
+      supabase.removeChannel(dmChannel);
+    };
+  }, [user?.id]);
 
   return (
     <Tab.Navigator
@@ -250,9 +323,9 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="Home" component={HomeStack} />
-      <Tab.Screen name="Search" children={() => <PlaceholderScreen label="Search" />} />
+      <Tab.Screen name="Search" component={SearchStack} />
       <Tab.Screen name="DM" component={DMStack} />
-      <Tab.Screen name="Notifications" children={() => <PlaceholderScreen label="Alerts" scrollable />} />
+      <Tab.Screen name="Notifications" component={NotificationsStack} />
       <Tab.Screen name="Profile" component={ProfileStack} />
     </Tab.Navigator>
   );

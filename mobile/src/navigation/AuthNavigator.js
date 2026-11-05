@@ -1,17 +1,2 @@
-import React from 'react';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import LoginScreen from '../screens/LoginScreen';
-import SignupScreen from '../screens/SignupScreen';
-import ProfileSetupScreen from '../screens/ProfileSetupScreen';
-
-const Stack = createNativeStackNavigator();
-
-export default function AuthNavigator() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Signup" component={SignupScreen} />
-      <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
-    </Stack.Navigator>
-  );
-}
+PS C:\Users\USERSPC\Desktop\Bloc\bloc> Select-String -Path mobile\src\auth\AuthContext.js -Pattern "updateUsername|updateDisplayName|COOLDOWN_MS"
+PS C:\Users\USERSPC\Desktop\Bloc\bloc>

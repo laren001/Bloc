@@ -30,8 +30,6 @@ router.get('/search', async (req, res) => {
   let results = [...merged.values()];
   if (viewer_id) results = results.filter((p) => p.id !== viewer_id);
 
-  // Usernames that start with the search term rank above ones that just
-  // contain it somewhere in the middle.
   const lowerTerm = term.toLowerCase();
   results.sort((a, b) => {
     const aStarts = a.username?.toLowerCase().startsWith(lowerTerm) ? 0 : 1;
@@ -79,24 +77,82 @@ router.get('/:id', async (req, res) => {
   });
 });
 
+// GET /users/:id/posts — a user's profile grid: their own posts merged
+// with their own reposts, sorted chronologically by whichever happened
+// (posting vs. reposting) most recently.
 router.get('/:id/posts', async (req, res) => {
   const { id } = req.params;
 
-  const { data, error } = await supabase
-    .from('posts')
-    .select('*, profiles!user_id(username, avatar_url), likes(count), comments(count)')
-    .eq('user_id', id)
-    .order('created_at', { ascending: false });
+  const [{ data: postsData, error: postsError }, { data: repostsData, error: repostsError }] = await Promise.all([
+    supabase
+      .from('posts')
+      .select(`
+        *,
+        profiles!user_id(username, avatar_url),
+        likes(count),
+        comments(count),
+        reposts(count),
+        post_tags(profiles(id, username, avatar_url)),
+        caption_mentions(profiles(id, username, avatar_url))
+      `)
+      .eq('user_id', id)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('reposts')
+      .select(`
+        id, created_at,
+        profiles!user_id(id, username, avatar_url),
+        posts!original_post_id(
+          *,
+          profiles!user_id(username, avatar_url),
+          likes(count),
+          comments(count),
+          reposts(count),
+          post_tags(profiles(id, username, avatar_url)),
+          caption_mentions(profiles(id, username, avatar_url))
+        )
+      `)
+      .eq('user_id', id)
+      .order('created_at', { ascending: false }),
+  ]);
 
-  if (error) return res.status(500).json({ error: error.message });
+  if (postsError) return res.status(500).json({ error: postsError.message });
+  if (repostsError) return res.status(500).json({ error: repostsError.message });
 
-  const posts = data.map((post) => ({
-    ...post,
-    like_count: post.likes?.[0]?.count ?? 0,
-    comment_count: post.comments?.[0]?.count ?? 0,
+  const buildEntry = (post) => {
+    const { post_tags, caption_mentions, ...rest } = post;
+    return {
+      ...rest,
+      tagged_users: (post_tags || []).map((t) => t.profiles).filter(Boolean),
+      mentioned_users: (caption_mentions || []).map((m) => m.profiles).filter(Boolean),
+      like_count: post.likes?.[0]?.count ?? 0,
+      comment_count: post.comments?.[0]?.count ?? 0,
+      repost_count: post.reposts?.[0]?.count ?? 0,
+    };
+  };
+
+  const originalEntries = (postsData || []).map((post) => ({
+    feed_key: `post:${post.id}`,
+    sort_at: post.created_at,
+    is_repost: false,
+    ...buildEntry(post),
   }));
 
-  res.json(posts);
+  const repostEntries = (repostsData || [])
+    .filter((r) => r.posts) // guards against a repost of a since-deleted post
+    .map((r) => ({
+      feed_key: `repost:${r.id}`,
+      sort_at: r.created_at,
+      is_repost: true,
+      reposted_by: r.profiles,
+      ...buildEntry(r.posts),
+    }));
+
+  const merged = [...originalEntries, ...repostEntries].sort(
+    (a, b) => new Date(b.sort_at) - new Date(a.sort_at)
+  );
+
+  res.json(merged);
 });
 
 // POST /users/:id/avatar — upload or replace a profile avatar image.

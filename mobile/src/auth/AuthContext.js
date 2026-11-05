@@ -5,6 +5,7 @@ const AuthContext = createContext(null);
 
 const DISPLAY_NAME_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 1 day
 const USERNAME_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const USERNAME_PATTERN = /^[a-zA-Z0-9]+$/;
 
 // How long until a cooldown clears, in a short human-readable form.
 function formatRemaining(msRemaining) {
@@ -55,6 +56,10 @@ export function AuthProvider({ children }) {
   }
 
   async function signUp({ email, password, username }) {
+    if (!USERNAME_PATTERN.test(username)) {
+      throw new Error('Usernames can only contain letters and numbers.');
+    }
+
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
 
@@ -107,9 +112,12 @@ export function AuthProvider({ children }) {
     });
   }
 
-  // Username: once every 7 days.
+  // Username: once every 7 days, letters and numbers only.
   async function updateUsername(newUsername) {
     if (!session?.user) throw new Error('No active session');
+    if (!USERNAME_PATTERN.test(newUsername)) {
+      throw new Error('Usernames can only contain letters and numbers.');
+    }
 
     const elapsed = msSinceOrInfinity(profile?.username_updated_at);
     if (elapsed < USERNAME_COOLDOWN_MS) {

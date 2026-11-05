@@ -42,7 +42,12 @@ export default function SignupScreen({ navigation }) {
         Join Bloc — starting at FUT Minna, open to anyone.
       </Text>
 
-      <TextField label="Username" value={username} onChangeText={setUsername} placeholder="username" />
+      <TextField
+        label="Username"
+        value={username}
+        onChangeText={(v) => setUsername(v.replace(/[^a-zA-Z0-9]/g, ''))}
+        placeholder="username"
+      />
       <TextField label="Email" value={email} onChangeText={setEmail} placeholder="you@email.com" keyboardType="email-address" />
       <TextField label="Password" value={password} onChangeText={setPassword} placeholder="••••••••" secureTextEntry />
 

@@ -5,9 +5,11 @@ import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
 import { TextField, PrimaryButton } from '../components/FormFields';
 
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
 export default function ProfileSetupScreen() {
   const { theme } = useTheme();
-  const { updateProfile } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
   const [avatarUri, setAvatarUri] = useState(null);
@@ -26,8 +28,28 @@ export default function ProfileSetupScreen() {
   const handleFinish = async () => {
     setLoading(true);
     try {
-      // Avatar upload to Cloudinary is wired in Phase 3 alongside post uploads —
-      // for now this saves display name and bio, which is enough to unlock the app.
+      // Upload the avatar first (if one was picked), same pattern as post
+      // image uploads: multipart form → backend streams to Cloudinary →
+      // backend saves the resulting URL onto the profile row.
+      if (avatarUri && user?.id) {
+        const formData = new FormData();
+        formData.append('avatar', {
+          uri: avatarUri,
+          name: 'avatar.jpg',
+          type: 'image/jpeg',
+        });
+
+        const res = await fetch(`${API_URL}/users/${user.id}/avatar`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'Avatar upload failed');
+        }
+      }
+
       await updateProfile({ display_name: displayName, bio });
       // No manual navigation needed — App.js already shows the main app
       // once a session exists.

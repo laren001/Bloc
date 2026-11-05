@@ -1,8 +1,10 @@
-﻿import React, { useState, useCallback } from 'react';
+﻿import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
+import { supabase } from '../lib/supabase';
+import { authFetch } from '../lib/authFetch';
 import Avatar from '../components/Avatar';
 import LoadingBricks from '../components/LoadingBricks';
 
@@ -29,7 +31,7 @@ export default function DMInboxScreen() {
   const loadInbox = useCallback(async () => {
     if (!user?.id) return;
     try {
-      const res = await fetch(`${API_URL}/messages/${user.id}`);
+      const res = await authFetch(`${API_URL}/messages/${user.id}`);
       const data = await res.json();
       setConversations(data);
     } catch (err) {
@@ -44,6 +46,28 @@ export default function DMInboxScreen() {
       loadInbox();
     }, [loadInbox])
   );
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`inbox:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          const msg = payload.new;
+          if (msg.sender_id === user.id || msg.recipient_id === user.id) {
+            loadInbox();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, loadInbox]);
 
   const openChat = (convo) => {
     navigation.navigate('Chat', {
