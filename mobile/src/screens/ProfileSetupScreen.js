@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Alert, TouchableOpacity, Image, KeyboardAvoidin
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../auth/AuthContext';
+import { authFetch } from '../lib/authFetch';
 import { TextField, PrimaryButton } from '../components/FormFields';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -28,9 +29,8 @@ export default function ProfileSetupScreen() {
   const handleFinish = async () => {
     setLoading(true);
     try {
-      // Upload the avatar first (if one was picked), same pattern as post
-      // image uploads: multipart form → backend streams to Cloudinary →
-      // backend saves the resulting URL onto the profile row.
+      // Upload the avatar first (if one was picked). The backend only lets
+      // a user replace their OWN avatar, based on their verified token.
       if (avatarUri && user?.id) {
         const formData = new FormData();
         formData.append('avatar', {
@@ -39,7 +39,7 @@ export default function ProfileSetupScreen() {
           type: 'image/jpeg',
         });
 
-        const res = await fetch(`${API_URL}/users/${user.id}/avatar`, {
+        const res = await authFetch(`${API_URL}/users/${user.id}/avatar`, {
           method: 'POST',
           body: formData,
         });
@@ -51,7 +51,7 @@ export default function ProfileSetupScreen() {
       }
 
       await updateProfile({ display_name: displayName, bio });
-      // No manual navigation needed — App.js already shows the main app
+      // No manual navigation needed - App.js already shows the main app
       // once a session exists.
     } catch (err) {
       Alert.alert('Could not save profile', err.message);

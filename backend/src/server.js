@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
@@ -18,7 +18,7 @@ app.use(express.json());
 app.get('/', (req, res) => res.json({ status: 'Bloc API is running' }));
 
 // Every route below verifies the caller's real identity from their
-// Supabase session token — routes no longer trust a user_id sent in the
+// Supabase session token - routes no longer trust a user_id sent in the
 // request body.
 app.use('/posts', requireAuth, postsRouter);
 app.use('/messages', requireAuth, messagesRouter);
@@ -27,9 +27,9 @@ app.use('/notifications', requireAuth, notificationsRouter);
 
 // NOT YET COVERED: stories.js and its mobile screens (StoriesBar,
 // CreateStoryScreen, StoryViewer, HomeScreen) were never reviewed in this
-// pass — wrapping this route without also updating those screens to send
+// pass - wrapping this route without also updating those screens to send
 // an auth header would break Stories outright. Left unauthenticated
-// intentionally until that's done as its own follow-up.
+// intentionally until that is done as its own follow-up.
 app.use('/stories', storiesRouter);
 
 const PORT = process.env.PORT || 4000;

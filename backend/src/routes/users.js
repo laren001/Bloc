@@ -6,11 +6,11 @@ import cloudinary from '../config/cloudinary.js';
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// GET /users/search?q=...&viewer_id=... — used by the post-tagging picker
-// (and eventually a real Search tab). Must be declared before /:id below,
-// or Express would treat "search" as an :id.
+// GET /users/search?q=... - viewer is always the verified caller, so
+// they are automatically excluded from their own search results.
 router.get('/search', async (req, res) => {
-  const { q, viewer_id } = req.query;
+  const { q } = req.query;
+  const viewer_id = req.userId;
   if (!q || !q.trim()) return res.json([]);
 
   const term = q.trim();
@@ -27,8 +27,7 @@ router.get('/search', async (req, res) => {
   const merged = new Map();
   [...(byUsername || []), ...(byDisplayName || [])].forEach((p) => merged.set(p.id, p));
 
-  let results = [...merged.values()];
-  if (viewer_id) results = results.filter((p) => p.id !== viewer_id);
+  const results = [...merged.values()].filter((p) => p.id !== viewer_id);
 
   const lowerTerm = term.toLowerCase();
   results.sort((a, b) => {
@@ -42,7 +41,7 @@ router.get('/search', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
-  const { viewer_id } = req.query;
+  const viewer_id = req.userId;
 
   const { data: profile, error } = await supabase
     .from('profiles')
@@ -58,28 +57,21 @@ router.get('/:id', async (req, res) => {
     supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', id),
   ]);
 
-  let is_following_viewer_target = false;
-  if (viewer_id) {
-    const { data: followRow } = await supabase
-      .from('follows')
-      .select('follower_id')
-      .eq('follower_id', viewer_id)
-      .eq('following_id', id)
-      .maybeSingle();
-    is_following_viewer_target = !!followRow;
-  }
+  const { data: followRow } = await supabase
+    .from('follows')
+    .select('follower_id')
+    .eq('follower_id', viewer_id)
+    .eq('following_id', id)
+    .maybeSingle();
 
   res.json({
     ...profile,
     followers_count: followers_count ?? 0,
     following_count: following_count ?? 0,
-    is_following_viewer_target,
+    is_following_viewer_target: !!followRow,
   });
 });
 
-// GET /users/:id/posts — a user's profile grid: their own posts merged
-// with their own reposts, sorted chronologically by whichever happened
-// (posting vs. reposting) most recently.
 router.get('/:id/posts', async (req, res) => {
   const { id } = req.params;
 
@@ -139,7 +131,7 @@ router.get('/:id/posts', async (req, res) => {
   }));
 
   const repostEntries = (repostsData || [])
-    .filter((r) => r.posts) // guards against a repost of a since-deleted post
+    .filter((r) => r.posts)
     .map((r) => ({
       feed_key: `repost:${r.id}`,
       sort_at: r.created_at,
@@ -155,10 +147,13 @@ router.get('/:id/posts', async (req, res) => {
   res.json(merged);
 });
 
-// POST /users/:id/avatar — upload or replace a profile avatar image.
+// POST /users/:id/avatar - a user can only replace their OWN avatar.
 router.post('/:id/avatar', upload.single('avatar'), async (req, res) => {
   const { id } = req.params;
 
+  if (req.userId !== id) {
+    return res.status(403).json({ error: "You can't update another user's avatar" });
+  }
   if (!req.file) return res.status(400).json({ error: 'Avatar image is required' });
 
   try {
@@ -186,9 +181,8 @@ router.post('/:id/avatar', upload.single('avatar'), async (req, res) => {
 
 router.post('/:id/follow', async (req, res) => {
   const { id: following_id } = req.params;
-  const { follower_id } = req.body;
+  const follower_id = req.userId;
 
-  if (!follower_id) return res.status(400).json({ error: 'follower_id is required' });
   if (follower_id === following_id) return res.status(400).json({ error: "Can't follow yourself" });
 
   const { error } = await supabase.from('follows').insert({ follower_id, following_id });
@@ -206,9 +200,7 @@ router.post('/:id/follow', async (req, res) => {
 
 router.delete('/:id/follow', async (req, res) => {
   const { id: following_id } = req.params;
-  const { follower_id } = req.body;
-
-  if (!follower_id) return res.status(400).json({ error: 'follower_id is required' });
+  const follower_id = req.userId;
 
   const { error } = await supabase.from('follows').delete().match({ follower_id, following_id });
   if (error) return res.status(500).json({ error: error.message });

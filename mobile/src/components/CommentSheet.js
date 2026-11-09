@@ -89,7 +89,7 @@ export default function CommentSheet({ post, onClose, onCommentAdded }) {
         ListEmptyComponent={
           !loading ? (
             <Text style={{ color: theme.textSecondary, fontSize: scaleFont(13), padding: 16 }}>
-              No comments yet - say something first.
+              No comments yet — say something first.
             </Text>
           ) : null
         }
@@ -115,7 +115,7 @@ export default function CommentSheet({ post, onClose, onCommentAdded }) {
         <TextInput
           value={text}
           onChangeText={setText}
-          placeholder="Add a comment..."
+          placeholder="Add a comment…"
           placeholderTextColor={theme.textSecondary}
           style={[
             styles.input,

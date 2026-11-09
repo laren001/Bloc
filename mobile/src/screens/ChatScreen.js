@@ -31,7 +31,7 @@ export default function ChatScreen() {
     try {
       const res = await authFetch(`${API_URL}/messages/${user.id}/${otherUserId}`);
       const data = await res.json();
-      setMessages(Array.isArray(data) ? data : []);
+      setMessages(data);
 
       authFetch(`${API_URL}/messages/read`, {
         method: 'PATCH',
@@ -104,7 +104,7 @@ export default function ChatScreen() {
     }
   };
 
-  // Picking media just stages it for preview - nothing is sent yet.
+  // Picking media just stages it for preview — nothing is sent yet.
   const pickMedia = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -126,7 +126,7 @@ export default function ChatScreen() {
     setPendingMedia(null);
   };
 
-  // Sends the staged media (plus whatever is in the text box as an
+  // Sends the staged media (plus whatever's in the text box as an
   // optional caption), then clears both.
   const confirmSendMedia = async () => {
     if (!pendingMedia || !user?.id || !otherUserId) return;
@@ -198,7 +198,7 @@ export default function ChatScreen() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <Text style={{ color: theme.textSecondary, fontSize: scaleFont(13), textAlign: 'center', marginTop: 24 }}>
-            {'Say hello \uD83D\uDC4B'}
+            Say hello 👋
           </Text>
         }
         renderItem={({ item }) => {
@@ -274,7 +274,7 @@ export default function ChatScreen() {
           <TextInput
             value={text}
             onChangeText={setText}
-            placeholder="Add a caption..."
+            placeholder="Add a caption…"
             placeholderTextColor={theme.textSecondary}
             style={[styles.input, { backgroundColor: theme.background, borderColor: theme.border, color: theme.textPrimary, fontSize: scaleFont(14) }]}
           />
@@ -291,7 +291,7 @@ export default function ChatScreen() {
           <TextInput
             value={text}
             onChangeText={setText}
-            placeholder="Message..."
+            placeholder="Message…"
             placeholderTextColor={theme.textSecondary}
             style={[styles.input, { backgroundColor: theme.surface, borderColor: theme.border, color: theme.textPrimary, fontSize: scaleFont(14) }]}
           />

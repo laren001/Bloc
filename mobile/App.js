@@ -10,7 +10,6 @@ import Svg, { Path, Circle } from 'react-native-svg';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import { supabase } from './src/lib/supabase';
-import { authFetch } from './src/lib/authFetch';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -19,7 +18,6 @@ import PostScreen from './src/screens/PostScreen';
 import DMInboxScreen from './src/screens/DMInboxScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
-import SearchScreen from './src/screens/SearchScreen';
 import LoadingBricks from './src/components/LoadingBricks';
 import Avatar from './src/components/Avatar';
 
@@ -30,7 +28,6 @@ const HomeStackNav = createNativeStackNavigator();
 const ProfileStackNav = createNativeStackNavigator();
 const DMStackNav = createNativeStackNavigator();
 const NotificationsStackNav = createNativeStackNavigator();
-const SearchStackNav = createNativeStackNavigator();
 
 const ACTIVE_BG = '#CC5500';
 const ACTIVE_ICON = '#FFFFFF';
@@ -200,21 +197,14 @@ function DMStack() {
   );
 }
 
+// Notifications tab is also a stack, so tapping a notification can push
+// into the actor's profile the same way the other tabs do.
 function NotificationsStack() {
   return (
     <NotificationsStackNav.Navigator screenOptions={{ headerShown: false }}>
       <NotificationsStackNav.Screen name="NotificationsHome" component={NotificationsScreen} />
       <NotificationsStackNav.Screen name="UserProfile" component={ProfileScreen} />
     </NotificationsStackNav.Navigator>
-  );
-}
-
-function SearchStack() {
-  return (
-    <SearchStackNav.Navigator screenOptions={{ headerShown: false }}>
-      <SearchStackNav.Screen name="SearchHome" component={SearchScreen} />
-      <SearchStackNav.Screen name="UserProfile" component={ProfileScreen} />
-    </SearchStackNav.Navigator>
   );
 }
 
@@ -225,14 +215,16 @@ function MainTabs() {
 
   const [unread, setUnread] = React.useState({ notifications: false, dm: false });
 
+  // Check for anything already unread on load, then stay live via Realtime
+  // for the rest of the session.
   useEffect(() => {
     if (!user?.id) return;
 
     const checkInitialUnread = async () => {
       try {
         const [notifRes, inboxRes] = await Promise.all([
-          authFetch(`${API_URL}/notifications/${user.id}`),
-          authFetch(`${API_URL}/messages/${user.id}`),
+          fetch(`${API_URL}/notifications/${user.id}`),
+          fetch(`${API_URL}/messages/${user.id}`),
         ]);
         const notifs = await notifRes.json();
         const inbox = await inboxRes.json();
@@ -323,7 +315,7 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="Home" component={HomeStack} />
-      <Tab.Screen name="Search" component={SearchStack} />
+      <Tab.Screen name="Search" children={() => <PlaceholderScreen label="Search" />} />
       <Tab.Screen name="DM" component={DMStack} />
       <Tab.Screen name="Notifications" component={NotificationsStack} />
       <Tab.Screen name="Profile" component={ProfileStack} />

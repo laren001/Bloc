@@ -49,9 +49,6 @@ async function resolveMentions(text) {
   return [...merged.values()];
 }
 
-// Shapes a raw post row (or a repost's nested original post) into the
-// object the mobile app expects, folding in whether the viewer has
-// liked/reposted it.
 function buildPostEntry(post, likedPostIds, repostedPostIds) {
   return {
     ...withFlatTags(post),
@@ -63,11 +60,10 @@ function buildPostEntry(post, likedPostIds, repostedPostIds) {
   };
 }
 
-// GET /posts — chronological feed, merging original posts and reposts
-// into one timeline sorted by whichever action happened most recently
-// (a repost's own created_at, not the original post's).
+// GET /posts - chronological feed. The viewer is always the verified
+// caller (req.userId), not a spoofable ?viewer_id= query param.
 router.get('/', async (req, res) => {
-  const { viewer_id } = req.query;
+  const viewer_id = req.userId;
 
   const [{ data: postsData, error: postsError }, { data: repostsData, error: repostsError }] = await Promise.all([
     supabase.from('posts').select(POST_SELECT).order('created_at', { ascending: false }).limit(50),
@@ -81,16 +77,12 @@ router.get('/', async (req, res) => {
   if (postsError) return res.status(500).json({ error: postsError.message });
   if (repostsError) return res.status(500).json({ error: repostsError.message });
 
-  let likedPostIds = new Set();
-  let repostedPostIds = new Set();
-  if (viewer_id) {
-    const [{ data: viewerLikes }, { data: viewerReposts }] = await Promise.all([
-      supabase.from('likes').select('post_id').eq('user_id', viewer_id),
-      supabase.from('reposts').select('original_post_id').eq('user_id', viewer_id),
-    ]);
-    likedPostIds = new Set((viewerLikes || []).map((l) => l.post_id));
-    repostedPostIds = new Set((viewerReposts || []).map((r) => r.original_post_id));
-  }
+  const [{ data: viewerLikes }, { data: viewerReposts }] = await Promise.all([
+    supabase.from('likes').select('post_id').eq('user_id', viewer_id),
+    supabase.from('reposts').select('original_post_id').eq('user_id', viewer_id),
+  ]);
+  const likedPostIds = new Set((viewerLikes || []).map((l) => l.post_id));
+  const repostedPostIds = new Set((viewerReposts || []).map((r) => r.original_post_id));
 
   const originalEntries = (postsData || []).map((post) => ({
     feed_key: `post:${post.id}`,
@@ -100,7 +92,7 @@ router.get('/', async (req, res) => {
   }));
 
   const repostEntries = (repostsData || [])
-    .filter((r) => r.posts) // guards against a repost of a since-deleted post
+    .filter((r) => r.posts)
     .map((r) => ({
       feed_key: `repost:${r.id}`,
       sort_at: r.created_at,
@@ -116,9 +108,11 @@ router.get('/', async (req, res) => {
   res.json(merged);
 });
 
-// POST /posts — create a new post (photo or short video + caption)
+// POST /posts - the author is always the verified caller (req.userId),
+// not a user_id field the client could set to someone else.
 router.post('/', upload.single('image'), async (req, res) => {
-  const { user_id, caption, location, tagged_user_ids } = req.body;
+  const user_id = req.userId;
+  const { caption, location, tagged_user_ids } = req.body;
 
   if (!req.file) return res.status(400).json({ error: 'A photo or video is required' });
 
@@ -211,9 +205,8 @@ router.post('/', upload.single('image'), async (req, res) => {
   }
 });
 
-// POST /posts/:id/like
 router.post('/:id/like', async (req, res) => {
-  const { user_id } = req.body;
+  const user_id = req.userId;
   const { id: post_id } = req.params;
 
   const { error } = await supabase.from('likes').insert({ user_id, post_id });
@@ -233,9 +226,8 @@ router.post('/:id/like', async (req, res) => {
   res.status(201).json({ success: true });
 });
 
-// DELETE /posts/:id/like
 router.delete('/:id/like', async (req, res) => {
-  const { user_id } = req.body;
+  const user_id = req.userId;
   const { id: post_id } = req.params;
 
   const { error } = await supabase.from('likes').delete().match({ user_id, post_id });
@@ -243,10 +235,8 @@ router.delete('/:id/like', async (req, res) => {
   res.json({ success: true });
 });
 
-// POST /posts/:id/repost — public repost to the reposter's own feed/profile.
-// Reposting your own post is allowed but doesn't notify yourself.
 router.post('/:id/repost', async (req, res) => {
-  const { user_id } = req.body;
+  const user_id = req.userId;
   const { id: original_post_id } = req.params;
 
   const { data, error } = await supabase
@@ -274,9 +264,8 @@ router.post('/:id/repost', async (req, res) => {
   res.status(201).json(data);
 });
 
-// DELETE /posts/:id/repost — undo a repost
 router.delete('/:id/repost', async (req, res) => {
-  const { user_id } = req.body;
+  const user_id = req.userId;
   const { id: original_post_id } = req.params;
 
   const { error } = await supabase.from('reposts').delete().match({ user_id, original_post_id });
@@ -284,9 +273,9 @@ router.delete('/:id/repost', async (req, res) => {
   res.json({ success: true });
 });
 
-// POST /posts/:id/comments
 router.post('/:id/comments', async (req, res) => {
-  const { user_id, content } = req.body;
+  const user_id = req.userId;
+  const { content } = req.body;
   const { id: post_id } = req.params;
 
   const { data: comment, error } = await supabase
@@ -341,7 +330,6 @@ router.post('/:id/comments', async (req, res) => {
   res.status(201).json({ ...comment, mentioned_users: mentionedProfiles });
 });
 
-// GET /posts/:id/comments
 router.get('/:id/comments', async (req, res) => {
   const { id: post_id } = req.params;
 

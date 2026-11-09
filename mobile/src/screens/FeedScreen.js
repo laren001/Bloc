@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, FlatList, Image, TouchableOpacity, StyleSheet, RefreshControl, Modal, Animated, Pressable } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,10 +6,10 @@ import { Video, ResizeMode } from 'expo-av';
 import { useTheme } from '../theme/ThemeContext';
 import { typography, spacing } from '../theme/tokens';
 import { useAuth } from '../auth/AuthContext';
+import { authFetch } from '../lib/authFetch';
 import CommentSheet from '../components/CommentSheet';
 import MentionText from '../components/MentionText';
 import LoadingBricks from '../components/LoadingBricks';
-import { authFetch } from '../lib/authFetch';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const DOUBLE_TAP_DELAY = 280;
@@ -21,6 +21,7 @@ export default function FeedScreen() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
   const [activeComments, setActiveComments] = useState(null);
   const [playingVideos, setPlayingVideos] = useState({});
 
@@ -35,14 +36,23 @@ export default function FeedScreen() {
     return heartAnims.current[feedKey];
   };
 
+  // The backend now identifies the viewer from the auth token, so there's
+  // no viewer_id to send. A non-OK response is surfaced as an error
+  // instead of being treated as a list of posts.
   const loadFeed = useCallback(async () => {
     try {
-      const viewerParam = user?.id ? `?viewer_id=${user.id}` : '';
       const res = await authFetch(`${API_URL}/posts`);
       const data = await res.json();
-      setPosts(data);
+
+      if (!res.ok) {
+        throw new Error(data?.error || `Request failed (${res.status})`);
+      }
+
+      setPosts(Array.isArray(data) ? data : []);
+      setError(null);
     } catch (err) {
       console.error('Failed to load feed', err);
+      setError(err.message || 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -79,11 +89,10 @@ export default function FeedScreen() {
     );
 
     try {
-      await authFetch(`${API_URL}/posts/${post.id}/like`, {
+      const res = await authFetch(`${API_URL}/posts/${post.id}/like`, {
         method: wasLiked ? 'DELETE' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id }),
       });
+      if (!res.ok) throw new Error(`Like failed (${res.status})`);
     } catch (err) {
       console.error('Failed to toggle like', err);
       setPosts((prev) =>
@@ -111,8 +120,6 @@ export default function FeedScreen() {
     try {
       const res = await authFetch(`${API_URL}/posts/${post.id}/repost`, {
         method: wasReposted ? 'DELETE' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id }),
       });
       if (!res.ok && res.status !== 409) throw new Error('Repost failed');
       // A fresh load picks up the new repost as its own feed entry
@@ -144,6 +151,10 @@ export default function FeedScreen() {
     setPlayingVideos((prev) => ({ ...prev, [feedKey]: !prev[feedKey] }));
   };
 
+  // Single tap on a video toggles play/pause; a second tap within the
+  // delay window counts as a double-tap and likes the post instead. The
+  // single-tap action waits out the delay window so it doesn't fire right
+  // before a double-tap arrives.
   const handleMediaPress = (item) => {
     const feedKey = item.feed_key;
     const now = Date.now();
@@ -335,7 +346,31 @@ export default function FeedScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textPrimary} />
         }
-        contentContainerStyle={{ paddingBottom: spacing.xl }}
+        contentContainerStyle={{ paddingBottom: spacing.xl, flexGrow: 1 }}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            {error ? (
+              <>
+                <Text style={{ color: theme.textPrimary, fontSize: scaleFont(15), fontWeight: '700', textAlign: 'center' }}>
+                  Couldn't load the feed
+                </Text>
+                <Text style={{ color: theme.textSecondary, fontSize: scaleFont(12.5), textAlign: 'center', marginTop: 6 }}>
+                  {error}
+                </Text>
+                <TouchableOpacity
+                  onPress={onRefresh}
+                  style={[styles.retryButton, { borderColor: theme.border }]}
+                >
+                  <Text style={{ color: theme.textPrimary, fontWeight: '700', fontSize: scaleFont(13.5) }}>Try again</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text style={{ color: theme.textSecondary, fontSize: scaleFont(14), textAlign: 'center' }}>
+                No posts yet — be the first to post.
+              </Text>
+            )}
+          </View>
+        }
       />
 
       <Modal visible={!!activeComments} animationType="slide" onRequestClose={() => setActiveComments(null)}>
@@ -385,4 +420,6 @@ const styles = StyleSheet.create({
   caption: { lineHeight: 20 },
   taggedLine: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.lg, paddingTop: 2 },
   viewComments: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingTop: 80 },
+  retryButton: { marginTop: 16, borderWidth: 1, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 22 },
 });

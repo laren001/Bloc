@@ -6,20 +6,23 @@ import cloudinary from '../config/cloudinary.js';
 const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 60 * 1024 * 1024 }, // 60MB cap, same as posts
+  limits: { fileSize: 60 * 1024 * 1024 },
 });
 
 function previewText(msg) {
   if (msg.content) return msg.content;
-  if (msg.media_type === 'video') return '🎥 Video';
-  if (msg.media_type === 'photo') return '📷 Photo';
+  if (msg.media_type === 'video') return '\uD83C\uDFA5 Video';
+  if (msg.media_type === 'photo') return '\uD83D\uDCF7 Photo';
   return '';
 }
 
-// GET /messages/:userId - inbox: one row per conversation partner, with
-// their profile, the most recent message, and how many are unread.
+// GET /messages/:userId - a user can only fetch their OWN inbox.
 router.get('/:userId', async (req, res) => {
   const { userId } = req.params;
+
+  if (req.userId !== userId) {
+    return res.status(403).json({ error: "You can't view another user's inbox" });
+  }
 
   const { data: allMessages, error } = await supabase
     .from('messages')
@@ -67,9 +70,14 @@ router.get('/:userId', async (req, res) => {
   res.json(result);
 });
 
-// GET /messages/:userId/:otherUserId - conversation between two users
+// GET /messages/:userId/:otherUserId - a user can only fetch a
+// conversation where THEY are the :userId (their own view of the chat).
 router.get('/:userId/:otherUserId', async (req, res) => {
   const { userId, otherUserId } = req.params;
+
+  if (req.userId !== userId) {
+    return res.status(403).json({ error: "You can't view someone else's conversation" });
+  }
 
   const { data, error } = await supabase
     .from('messages')
@@ -83,14 +91,13 @@ router.get('/:userId/:otherUserId', async (req, res) => {
   res.json(data);
 });
 
-// POST /messages - send a message. Accepts either a JSON body (text-only,
-// unchanged from before) or multipart form data with a "media" file
-// (photo or video, with optional accompanying text in "content").
+// POST /messages - the sender is always the verified caller.
 router.post('/', upload.single('media'), async (req, res) => {
-  const { sender_id, recipient_id, content } = req.body;
+  const sender_id = req.userId;
+  const { recipient_id, content } = req.body;
 
-  if (!sender_id || !recipient_id) {
-    return res.status(400).json({ error: 'sender_id and recipient_id are required' });
+  if (!recipient_id) {
+    return res.status(400).json({ error: 'recipient_id is required' });
   }
   if (!content && !req.file) {
     return res.status(400).json({ error: 'A message needs text or media' });
@@ -137,9 +144,10 @@ router.post('/', upload.single('media'), async (req, res) => {
   res.status(201).json(data);
 });
 
-// PATCH /messages/read - mark all messages from other_user_id to user_id as read.
+// PATCH /messages/read - the reader is always the verified caller.
 router.patch('/read', async (req, res) => {
-  const { user_id, other_user_id } = req.body;
+  const user_id = req.userId;
+  const { other_user_id } = req.body;
 
   const { error } = await supabase
     .from('messages')
